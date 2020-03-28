@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="redismpx", # Replace with your own username
-    version="0.0.2",
+    version="0.1.0",
     author="Loris Cro",
     author_email="kappaloris@gmail.com",
     description="A Redis Pub/Sub multiplexer.",
