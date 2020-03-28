@@ -57,7 +57,7 @@ class Multiplexer:
 
 		# Use `mpx` to create new subscriptions.
 		channel_sub = mpx.new_channel_subcription(
-			my_on_message, my_on_disconnect, None)
+			my_on_message, my_on_disconnect, None) 
 		pattern_sub = mpx.new_pattern_subscription("hello-*", 
 			my_on_message, None, my_on_activation)
 		promise_sub = mpx.new_promise_subscription("hello-")
