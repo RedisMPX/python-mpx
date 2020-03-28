@@ -17,7 +17,7 @@ async def handle_ws(ws):
 		raise Exception("blargh!")
 
 	# Create a subscription for this websocket
-	sub = mpx.new_pattern_subscription("test*", on_message, lambda x: print(f"YEPPPPP!! {type(x)}"), None)
+	sub = mpx.new_channel_subscription(on_message, lambda x: print(f"Error: {type(x)}"), None)
 
 	# Keep reading from the websocket, use the messages sent by the user
 	# to add and remove channels from the subscription.

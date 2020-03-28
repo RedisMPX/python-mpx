@@ -21,7 +21,7 @@ class Multiplexer:
 	Multiplexer accepts the same connection options 
 	that you can specify with :func:`aioredis.create_connection`.
 
-	See the documentation of `aio-libs/aioredis` for more information.
+	See the documentation of `aio-libs/aioredis <https://github.com/aio-libs/aioredis>`_ for more information.
 
 	Usage example:
 
