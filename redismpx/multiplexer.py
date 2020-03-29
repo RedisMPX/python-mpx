@@ -245,16 +245,6 @@ class Multiplexer:
 					continue
 
 				# SUBSCRIPTIONS 
-				if msg[0] == b'unsubscribe':
-					ch_name = msg[1]
-					self.active_channels.remove(ch_name)
-					continue
-
-				if msg[0] == b'punsubscribe':
-					pat_name = msg[1]
-					self.active_patterns.remove(pat_name)
-					continue
-
 				if msg[0] == b'subscribe':
 					ch_name = msg[1]
 					self.active_channels.add(ch_name)
@@ -332,6 +322,7 @@ class Multiplexer:
 		fn_box_list.remove(fn_box)
 		if len(fn_box_list) == 0:
 			del self.channels[channel]
+			self.active_channels.remove(channel)
 			try:
 				if self.connection is not None:
 					self.connection.write_command(b"UNSUBSCRIBE", channel)
@@ -367,6 +358,7 @@ class Multiplexer:
 		fn_box_list.remove(fn_box)
 		if len(fn_box_list) == 0:
 			del self.patterns[pattern]
+			self.active_patterns.remove(pattern)
 			try:
 				if self.connection is not None:
 					self.connection.write_command(b"PUNSUBSCRIBE", pattern)
