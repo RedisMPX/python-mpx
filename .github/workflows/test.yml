@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.6]
 
     steps:
     - uses: actions/checkout@v2
@@ -17,7 +17,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install and run Redis
       run: |
-        apt-get install redis
+        sudo apt-get install redis
         redis-server &
     - name: Install dependencies
       run: |
