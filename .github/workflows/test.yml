@@ -28,15 +28,12 @@ jobs:
         pip install asyncio pytest pytest-asyncio
         pytest
     - name: Publish on pypi
+      if: contains(github.ref, 'ref/head/v*') && matrix.python-version '3.8'
       run: |
-        [ "$CONTINUE" = "true" ] && 
-        [ "JOB" -eq "3.8" ] && 
         pip install setuptools wheel twine && 
         python3 setup.py sdist bdist_wheel && 
         twine upload dist/*
       env: 
-        JOB: ${{ matrix.python-version }}
-        CONTINUE: ${{ contains(github.ref, 'ref/head/v*') }}
         TWINE_NON_INTERACTIVE: 1
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.pypi_token }}
