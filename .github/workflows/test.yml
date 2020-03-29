@@ -17,10 +17,11 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install and run Redis
       run: |
-        sudo apt-get install aioredis redis
+        sudo apt-get install redis
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        pip install aioredis
         pip install . 
     - name: Test with pytest
       run: |
