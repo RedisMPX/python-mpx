@@ -64,7 +64,7 @@ class PromiseSubscription:
 		PromiseSubscription is not active will cause this method to throw 
 		:class:`~redismpx.InactiveSubscription`. 
 
-		A promise that expires will throw a `TimeoutException`.
+		A promise that expires will throw a `asyncio.TimeoutError`.
 
 		:param suffix: the suffix that will be appended to the subscription's prefix
 		:param timeout: a timeout for the promise expressed in seconds

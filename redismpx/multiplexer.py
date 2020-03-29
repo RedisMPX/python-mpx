@@ -4,14 +4,13 @@ import aioredis
 from typing import Union, Awaitable, Callable, Optional
 from .connection import Conn
 from .utils import Box, as_bytes, jitter_exp_backoff
-from .channel_subscription import ChannelSubscription
-from .pattern_subscription import PatternSubscription
-from .promise_subscription import PromiseSubscription
+from .channel import ChannelSubscription
+from .pattern import PatternSubscription
+from .promise import PromiseSubscription
 
-
-OnMessage = Union[Callable[[bytes, bytes], None], Callable[[bytes, bytes], Awaitable[None]]]
-OnDisconnect = Union[Callable[[Exception], None], Callable[[Exception], Awaitable[None]]]
-OnActivation = Union[Callable[[bytes], None],Callable[[bytes], Awaitable[None]]]
+OnMessage = Callable[[bytes, bytes], Union[None, Awaitable[None]]]
+OnDisconnect = Callable[[Exception], Union[None, Awaitable[None]]]
+OnActivation = Callable[[bytes], Union[None, Awaitable[None]]]
 
 class Multiplexer:
 	"""
@@ -21,7 +20,17 @@ class Multiplexer:
 	Multiplexer accepts the same connection options 
 	that you can specify with :func:`aioredis.create_connection`.
 
-	See the documentation of `aio-libs/aioredis <https://github.com/aio-libs/aioredis>`_ for more information.
+	See the documentation of 
+	`aio-libs/aioredis <https://github.com/aio-libs/aioredis>`_ 
+	for more information.
+	
+	See the code example for an easy to understand explanation of the
+	expected signature for `on_message`, `on_disconnect` and `on_activation`.
+	Also, note that those callbacks should not throw exceptions as 
+	any exception will be logged as a warning and then discarded.
+
+	If you are making use of Python's type hints, you can import
+	`OnMessage`, `OnDisconnect`, and `OnActivation` from this package.
 
 	Usage example:
 
@@ -50,7 +59,7 @@ class Multiplexer:
 		# or a PatternSubscription).
 		def my_on_activation(name: bytes):
 			print("activated:", name)
-
+	
 		# you can also pass None in place of `on_disconnect`
 		# and `on_activation` if you're not interested in 
 		# reacting to those events.
@@ -77,133 +86,6 @@ class Multiplexer:
 		self.reconnecting = True
 		self.conn_reader = asyncio.create_task(self._read_messages())
 
-
-	async def _reconnect(self, cause):
-		if self.reconnecting:
-			return
-		logging.info(f"redismpx id({id(self)}): reconnecting because of error: {cause}")
-		for s in self.subscriptions:
-			if s.on_disconnect is not None:
-				try:
-					if asyncio.iscoroutinefunction(s.on_disconnect):
-						await s.on_disconnect(cause)
-					else:
-						s.on_disconnect(cause)
-				except Exception as e:
-					logging.warning(f"redismpx id({id(self)}): on_disconnect function threw exception: {e}")
-
-		self.reconnecting = True
-		self.active_channels = set()
-		self.active_patterns = set()
-		self.conn_reader.cancel()
-		try:
-			await self.conn_reader
-		except:
-			pass
-		self.connection.close()
-		self.connection = None
-		self.conn_reader = asyncio.create_task(self._read_messages())
-
-	async def _read_messages(self):
-		args, kwargs = self.connection_options
-		# Keep trying to connect
-		tries = 1
-		while not self.must_exit:
-			try:	
-				self.connection = await aioredis.create_connection(*args, **kwargs)
-				break # DO NOT DELETE THIS LINE LMAO
-			except Exception as e:
-				# Exp backoff + jitter
-				sleep_ms = jitter_exp_backoff(8, 512, tries)
-				await asyncio.sleep(sleep_ms/1000)
-				tries += 1
-
-		self.reconnecting = False
-
-		# Resubscribe to all channels, if any is present.
-		if len(self.channels) > 0:
-			self.connection.write_command(b"SUBSCRIBE", *self.channels.keys())
-
-		try:
-			async for msg in self.connection.read_message():
-				print(msg)
-
-				if msg[0] == b"message":
-					ch_name = msg[1]
-					if ch_name in self.channels:
-						for fn_box in self.channels[ch_name]:
-							try:
-								if asyncio.iscoroutinefunction(fn_box.on_message):
-									await fn_box.on_message(ch_name, msg[2])
-								else:
-									fn_box.on_message(ch_name, msg[2])
-							except Exception as e:
-								logging.warning(f"redismpx id({id(self)}): on_message function threw exception: {e}")
-					continue
-
-				if msg[0] == b"pmessage":
-					pat_name = msg[1]
-					if pat_name in self.patterns:
-						for fn_box in self.patterns[pat_name]:
-							try:
-								if asyncio.iscoroutinefunction(fn_box.on_message):
-									await fn_box.on_message(msg[2], msg[3])
-								else:
-									fn_box.on_message(msg[2], msg[3])
-							except Exception as e:
-								logging.warning(f"redismpx id({id(self)}): on_message function threw exception: {e}")
-					continue
-
-				# SUBSCRIPTIONS 
-
-				if msg[0] == b'unsubscribe':
-					ch_name = msg[1]
-					self.active_channels.remove(ch_name)
-					continue
-
-				if msg[0] == b'punsubscribe':
-					pat_name = msg[1]
-					self.active_patterns.remove(pat_name)
-					continue
-
-				if msg[0] == b'subscribe':
-					ch_name = msg[1]
-					self.active_channels.add(ch_name)
-					if ch_name in self.channels:
-						for fn_box in self.channels[ch_name]:
-							if fn_box.on_activation is None:
-								continue
-
-							try:
-								if asyncio.iscoroutinefunction(fn_box.on_activation):
-									await fn_box.on_activation(ch_name)
-								else:
-									fn_box.on_activation(ch_name)
-							except Exception as e:
-								logging.warning(f"redismpx id({id(self)}): on_activation function threw exception: {e}")
-					continue
-
-				if msg[0] == b'psubscribe':
-					pat_name = msg[1]
-					self.active_channels.add(pat_name)
-
-					if pat_name in self.patterns:
-						for fn_box in self.patterns[pat_name]:
-							if fn_box.on_activation is None:
-								continue
-
-							try:
-								if asyncio.iscoroutinefunction(fn_box.on_activation):
-									await fn_box.on_activation(pat_name)
-								else:
-									fn_box.on_activation(pat_name)
-							except Exception as e:
-								logging.warning(f"redismpx id({id(self)}): on_activation function threw exception: {e}")
-					continue
-
-
-		except Exception as e:
-			asyncio.create_task(self._reconnect(e))
 	
 	def new_channel_subscription(self, 
 		on_message: OnMessage, 
@@ -279,6 +161,133 @@ class Multiplexer:
 		self.must_exit = True
 		self.conn_reader.cancel()
 		self.connection.close()
+
+	async def _reconnect(self, cause):
+		if self.reconnecting:
+			return
+		for s in self.subscriptions:
+			if s.on_disconnect is not None:
+				try:
+					if asyncio.iscoroutinefunction(s.on_disconnect):
+						await s.on_disconnect(cause)
+					else:
+						s.on_disconnect(cause)
+				except Exception as e:
+					logging.warning(f"redismpx id({id(self)}): on_disconnect function threw exception: {e}")
+		
+		logging.info(f"redismpx id({id(self)}): reconnecting because of error: {cause}")
+		self.reconnecting = True
+		self.active_channels = set()
+		self.active_patterns = set()
+		self.conn_reader.cancel()
+		try:
+			await self.conn_reader
+		except:
+			pass
+		self.connection.close()
+		self.connection = None
+		self.conn_reader = asyncio.create_task(self._read_messages())
+
+	async def _read_messages(self):
+		logging.debug("redismpx started _read_messages")
+		args, kwargs = self.connection_options
+		# Keep trying to connect
+		tries = 1
+		while not self.must_exit:
+			try:	
+				self.connection = await aioredis.create_connection(*args, **kwargs)
+				break # DO NOT DELETE THIS LINE LMAO
+			except Exception as e:
+				# Exp backoff + jitter
+				sleep_ms = jitter_exp_backoff(8, 512, tries)
+				await asyncio.sleep(sleep_ms/1000)
+				if tries < 20:
+					tries += 1
+
+		logging.debug("redismpx connected")
+		self.reconnecting = False
+
+		# Resubscribe to all channels, if any is present.
+		if len(self.channels) > 0:
+			logging.debug("redismpx resubscribing %s", self.channels.keys())
+			self.connection.write_command(b"SUBSCRIBE", *self.channels.keys())
+
+		try:
+			async for msg in self.connection.read_message():
+				if msg[0] == b"message":
+					ch_name = msg[1]
+					if ch_name in self.channels:
+						for fn_box in self.channels[ch_name]:
+							try:
+								if asyncio.iscoroutinefunction(fn_box.on_message):
+									await fn_box.on_message(ch_name, msg[2])
+								else:
+									fn_box.on_message(ch_name, msg[2])
+							except Exception as e:
+								logging.warning(f"redismpx id({id(self)}): on_message function threw exception: {e}")
+					continue
+
+				if msg[0] == b"pmessage":
+					pat_name = msg[1]
+					if pat_name in self.patterns:
+						for fn_box in self.patterns[pat_name]:
+							try:
+								if asyncio.iscoroutinefunction(fn_box.on_message):
+									await fn_box.on_message(msg[2], msg[3])
+								else:
+									fn_box.on_message(msg[2], msg[3])
+							except Exception as e:
+								logging.warning(f"redismpx id({id(self)}): on_message function threw exception: {e}")
+					continue
+
+				# SUBSCRIPTIONS 
+				if msg[0] == b'unsubscribe':
+					ch_name = msg[1]
+					self.active_channels.remove(ch_name)
+					continue
+
+				if msg[0] == b'punsubscribe':
+					pat_name = msg[1]
+					self.active_patterns.remove(pat_name)
+					continue
+
+				if msg[0] == b'subscribe':
+					ch_name = msg[1]
+					self.active_channels.add(ch_name)
+					if ch_name in self.channels:
+						for fn_box in self.channels[ch_name]:
+							if fn_box.on_activation is None:
+								continue
+							try:
+								if asyncio.iscoroutinefunction(fn_box.on_activation):
+									await fn_box.on_activation(ch_name)
+								else:
+									fn_box.on_activation(ch_name)
+							except Exception as e:
+								logging.warning(f"redismpx id({id(self)}): on_activation function threw exception: {e}")
+					continue
+
+				if msg[0] == b'psubscribe':
+					pat_name = msg[1]
+					self.active_channels.add(pat_name)
+
+					if pat_name in self.patterns:
+						for fn_box in self.patterns[pat_name]:
+							if fn_box.on_activation is None:
+								continue
+
+							try:
+								if asyncio.iscoroutinefunction(fn_box.on_activation):
+									await fn_box.on_activation(pat_name)
+								else:
+									fn_box.on_activation(pat_name)
+							except Exception as e:
+								logging.warning(f"redismpx id({id(self)}): on_activation function threw exception: {e}")
+					continue
+
+
+		except Exception as e:
+			asyncio.create_task(self._reconnect(e))
 
 	async def _log_exeptions(self, callback, *args, **kwargs):
 		try:

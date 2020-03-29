@@ -1,7 +1,7 @@
 from .multiplexer import Multiplexer, OnMessage, OnDisconnect, OnActivation
-from .channel_subscription import ChannelSubscription
-from .pattern_subscription import PatternSubscription
-from .promise_subscription import PromiseSubscription, InactiveSubscription
+from .channel import ChannelSubscription
+from .pattern import PatternSubscription
+from .promise import PromiseSubscription, InactiveSubscription
 
 __all__ = [
 	'Multiplexer', 

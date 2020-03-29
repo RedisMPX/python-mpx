@@ -12,4 +12,4 @@ def as_bytes(string):
 	return string.encode()
 
 def jitter_exp_backoff(base, max, attempts):
-	return andom.randint(0, min(max, base * 2 ** attempts))
+	return random.randint(0, min(max, base * 2 ** attempts))
