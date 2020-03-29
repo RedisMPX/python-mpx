@@ -33,7 +33,7 @@ jobs:
         python3 setup.py sdist bdist_wheel &&
         twine upload dist/*
       env: 
-        CONTINUE: ${{contains(github.ref, "ref/head/v*")}}
+        CONTINUE: ${{ contains(github.ref, 'ref/head/v*') }}
         TWINE_NON_INTERACTIVE: 1
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.pypi_token }}
