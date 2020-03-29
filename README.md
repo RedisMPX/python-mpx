@@ -62,7 +62,12 @@ promise_sub = mpx.new_promise_subscription("hello-")
 
 ### ChannelSubscription
 ```python
-# Add a channel 
+channel_sub = mpx.new_channel_subcription(
+	lambda ch, msg: print(f"Message @ {ch}: {msg}"),
+	lambda e: print(f"Network Error: {type(e)}: {e}"),
+	lambda s: print(f"Subscription now active: {s}")) 
+
+# Add channels
 channel_sub.add("chan1")
 channel_sub.add("chan2")
 channel_sub.add("chan3")
@@ -71,17 +76,29 @@ channel_sub.add("chan3")
 channel_sub.remove("chan2")
 
 # Close the subscription
-pattern_sub.close()
+channel_sub.close()
 ```
 
 ### PatternSubscription
 ```python
+# Create the PatternSubscription.
+# Note how it also requires the pattern.
+pattern_sub = mpx.new_pattern_subcription(
+	"notifications:*",
+	lambda ch, msg: print(f"Message @ {ch}: {msg}"),
+	lambda e: print(f"Network Error: {type(e)}: {e}"),
+	lambda s: print(f"Subscription now active: {s}")) 
+
 # PatternSubscriptions can only be closed
-channel_sub.close()
+pattern_sub.close()
 ```
 
 ### PromiseSubscription
 ```python
+# Create the subscription. 
+# Note how it doesn't accept any callback.
+promise_sub = mpx.new_promise_subscription("hello-")
+
 # When first created (and after a network error that causes 
 # a reconnection), a PromiseSubscription is not immediately 
 # able to create new promises as it first needs the underlying
@@ -146,41 +163,9 @@ Main functionality completed. Needs testing.
 ## WebSocket Example
 This is a more realistic example of how to use RedisMPX.
 
-### Dependences
-`pip install aioredis starlette uvcorn`
-
-### Launching the application
-`$ uvicorn websocket:app`
-
-### Interacting with the application
-The application works like a simple WebSocket chat application that 
-expects commands from the user.
-
-- Sending `+hello` will subscribe you to channel `hello`, while `-hello` will do the opposite.
-- Sending `!hello` will broadcast the next message you send to `hello`.
-- You can use whatever channel name you like.
-
-To send those commands you can use a browser:
-```js
-// To create a websocket connection to localhost
-// you will need to deal with the browser's security
-// policies. Opening a file on the local filesystem
-// and typing these commands in the console should
-// do the trick.
-let ws = new WebSocket("ws://localhost:8000/ws")
-ws.onmessage = (x) => console.log("message:", x.data)
-ws.send("+test")
-ws.send("!test")
-ws.send("hello world!")
-```
-A more handy way of interacting with websockets are CLI clients:
-- https://github.com/hashrocket/ws (recommended)
-- https://github.com/vi/websocat
-- https://github.com/websockets/wscat
-
 ### Code
 This code is also available in [examples/websocket.py](/examples/websocket.py).
- 
+
 ```python
 # websocket.py
 
@@ -237,4 +222,34 @@ app = Starlette(debug=True, routes=[
 ])
 ```
 
+### Dependences
+`pip install aioredis starlette uvcorn`
+
+### Launching the application
+`$ uvicorn websocket:app`
+
+### Interacting with the application
+The application works like a simple WebSocket chat application that 
+expects commands from the user.
+
+- Sending `+hello` will subscribe you to channel `hello`, while `-hello` will do the opposite.
+- Sending `!hello` will broadcast the next message you send to `hello`.
+- You can use whatever channel name you like.
+
+To send those commands you can use a browser:
+```js
+// To create a websocket connection to localhost
+// you will need to deal with the browser's security
+// policies. Opening a file on the local filesystem
+// and typing these commands in the console should
+// do the trick.
+let ws = new WebSocket("ws://localhost:8000/ws")
+ws.onmessage = (x) => console.log("message:", x.data)
+ws.send("+test")
+ws.send("!test")
+ws.send("hello world!")
+```
+A more handy way of interacting with websockets are CLI clients:
+- https://github.com/hashrocket/ws (recommended)
+- https://github.com/websockets/wscat
 
