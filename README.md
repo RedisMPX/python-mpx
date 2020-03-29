@@ -157,9 +157,6 @@ except asyncio.CancelledError:
 promise_sub.close()
 ```
 
-## Status
-Main functionality completed. Needs testing.
-
 ## WebSocket Example
 This is a more realistic example of how to use RedisMPX.
 
@@ -228,10 +225,10 @@ app = Starlette(debug=True, routes=[
 ### Dependences
 `pip install redismpx aioredis starlette uvcorn`
 
-### Launching the application
+### Launching the example
 `$ uvicorn websocket:app`
 
-### Interacting with the application
+### Interacting with the example
 The application works like a simple WebSocket chat application that 
 expects commands from the user.
 

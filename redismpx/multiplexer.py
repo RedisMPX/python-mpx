@@ -84,6 +84,7 @@ class Multiplexer:
 		self.connection_options = (args, kwargs)
 		self.must_exit = False
 		self.reconnecting = True
+		self.connected_event = asyncio.Event()
 		self.conn_reader = asyncio.create_task(self._read_messages())
 
 	
@@ -160,7 +161,8 @@ class Multiplexer:
 	def close(self):
 		self.must_exit = True
 		self.conn_reader.cancel()
-		self.connection.close()
+		if self.connection:
+			self.connection.close()
 
 	async def _reconnect(self, cause):
 		if self.reconnecting:
@@ -177,6 +179,7 @@ class Multiplexer:
 		
 		logging.info(f"redismpx id({id(self)}): reconnecting because of error: {cause}")
 		self.reconnecting = True
+		self.connected_event.clear()
 		self.active_channels = set()
 		self.active_patterns = set()
 		self.conn_reader.cancel()
@@ -206,6 +209,7 @@ class Multiplexer:
 
 		logging.debug("redismpx connected")
 		self.reconnecting = False
+		self.connected_event.set()
 
 		# Resubscribe to all channels, if any is present.
 		if len(self.channels) > 0:
@@ -284,10 +288,9 @@ class Multiplexer:
 							except Exception as e:
 								logging.warning(f"redismpx id({id(self)}): on_activation function threw exception: {e}")
 					continue
-
-
 		except Exception as e:
-			asyncio.create_task(self._reconnect(e))
+			if not self.must_exit:
+				asyncio.create_task(self._reconnect(e))
 
 	async def _log_exeptions(self, callback, *args, **kwargs):
 		try:
