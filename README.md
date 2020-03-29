@@ -19,8 +19,17 @@ for each client connected to your service (e.g. WebSockets clients):
 Requires Python 3.6+, based on [aio-libs/aioredis](https://github.com/aio-libs/aioredis),
 an AsyncIO Redis client.
 
-`pip install redismpx`
+`pip install redismpx aioredis`
 
+## Features
+- Simple channel subscriptions
+- Pattern subscriptions
+- **[Networked promise system](https://python-mpx.readthedocs.io/en/latest/#redismpx.Multiplexer.new_promise_subscription)**
+- Connection retry with exponetial backoff + jitter
+
+## Documentation
+- [API Reference](https://python-mpx.readthedocs.io/en/latest/)
+- [Examples](/examples/)
 
 ## Usage
 ```python
@@ -33,12 +42,12 @@ mpx = Multiplexer('redis://localhost')
 # on_message is a callback (can be async)
 # that accepts a channel name and a message.
 async def my_on_message(channel: bytes, message: bytes):
-	await websocket.send(f"ch: {channel} msg: {message}")
+    await websocket.send(f"ch: {channel} msg: {message}")
 
 # on_disconnect is a callback (can be async) 
 # that accepts the error that caused the disconnection.
 def my_on_disconnect(error: Exception):
-	print("oh no!")
+    print("oh no!")
 
 # on_activation is a callback (can be async)
 # that accepts the name of the channel or pattern
@@ -46,7 +55,7 @@ def my_on_disconnect(error: Exception):
 # on whether it's attached to a ChannelSubscription
 # or a PatternSubscription).
 def my_on_activation(name: bytes):
-	print("activated:", name)
+    print("activated:", name)
 
 # you can also pass None in place of `on_disconnect`
 # and `on_activation` if you're not interested in 
@@ -54,18 +63,19 @@ def my_on_activation(name: bytes):
 
 # Use `mpx` to create new subscriptions.
 channel_sub = mpx.new_channel_subcription(
-	my_on_message, my_on_disconnect, None) 
+    my_on_message, my_on_disconnect, None) 
 pattern_sub = mpx.new_pattern_subscription("hello-*", 
-	my_on_message, None, my_on_activation)
+    my_on_message, None, my_on_activation)
 promise_sub = mpx.new_promise_subscription("hello-")
 ```
 
 ### ChannelSubscription
 ```python
+# Create the ChannelSubscription.
 channel_sub = mpx.new_channel_subcription(
-	lambda ch, msg: print(f"Message @ {ch}: {msg}"),
-	lambda e: print(f"Network Error: {type(e)}: {e}"),
-	lambda s: print(f"Subscription now active: {s}")) 
+    lambda ch, msg: print(f"Message @ {ch}: {msg}"),
+    lambda e: print(f"Network Error: {type(e)}: {e}"),
+    lambda s: print(f"Subscription now active: {s}")) 
 
 # Add channels
 channel_sub.add("chan1")
@@ -84,10 +94,10 @@ channel_sub.close()
 # Create the PatternSubscription.
 # Note how it also requires the pattern.
 pattern_sub = mpx.new_pattern_subcription(
-	"notifications:*",
-	lambda ch, msg: print(f"Message @ {ch}: {msg}"),
-	lambda e: print(f"Network Error: {type(e)}: {e}"),
-	lambda s: print(f"Subscription now active: {s}")) 
+    "notifications:*",
+    lambda ch, msg: print(f"Message @ {ch}: {msg}"),
+    lambda e: print(f"Network Error: {type(e)}: {e}"),
+    lambda s: print(f"Subscription now active: {s}")) 
 
 # PatternSubscriptions can only be closed
 pattern_sub.close()
@@ -110,16 +120,16 @@ await promise_sub.wait_for_activation()
 # Create a new promise. It might fail if the subscription is 
 # not active.
 try:
-	promise = promise_sub.new_promise("world", 10)
-	# The provided suffix will be composed with the subscription's
-	# prefix to create the final Redis Pub/Sub channel from which
-	# the message is expected to come. In this example, to fullfill
-	# the promise you could send, using redis-cli (or any other client):
-	#
-	#   > PUBLISH hello-world "your-promise-payload"
-	#
+    promise = promise_sub.new_promise("world", 10)
+    # The provided suffix will be composed with the subscription's
+    # prefix to create the final Redis Pub/Sub channel from which
+    # the message is expected to come. In this example, to fullfill
+    # the promise you could send, using redis-cli (or any other client):
+    #
+    #   > PUBLISH hello-world "your-promise-payload"
+    #
 except redismpx.InactiveSubscription:
-	# Wait and then Retry? Return an error to the user? Up to you.
+    # Wait and then Retry? Return an error to the user? Up to you.
 
 # A way of creating a promise that ensures no InactiveSubscription error 
 # will trigger. Note that this method needs to be awaited.
@@ -133,14 +143,14 @@ promise = await promise_sub.wait_for_new_promise("world", 10)
 
 # Resolve the promise
 try:
-	result = await promise
-	print(result) # prints b'your-promise-payload'
+    result = await promise
+    print(result) # prints b'your-promise-payload'
 except asyncio.TimeoutError:
-	# The promise timed out.
+    # The promise timed out.
 except asyncio.CancelledError:
-	# The promise was canceled. This happens when
-	# a reconnection event triggers while the promise
-	# is not yet resolved. 
+    # The promise was canceled. This happens when
+    # a reconnection event triggers while the promise
+    # is not yet resolved. 
 
 # Close the subscription (will automatically cancel all
 # outstanding promises and unlock all `wait_for_*` waiters).
@@ -149,16 +159,6 @@ promise_sub.close()
 
 ## Status
 Main functionality completed. Needs testing.
-
-## Features
-- Simple channel subscriptions
-- Pattern subscriptions
-- **[Networked promise system](https://python-mpx.readthedocs.io/en/latest/#redismpx.Multiplexer.new_promise_subscription)**
-- Connection retry with exponetial backoff + jitter
-
-## Documentation
-- [API Reference](https://python-mpx.readthedocs.io/en/latest/)
-- [Examples](/examples/)
 
 ## WebSocket Example
 This is a more realistic example of how to use RedisMPX.
@@ -179,43 +179,46 @@ from redismpx import Multiplexer
 # aioredis.create_redis() would accept.
 mpx = Multiplexer('redis://localhost')
 
-# Create a separate connection for publishing messages:
-pub_conn = aioredis.create_redis('redis://localhost')
+pub_conn = None
 
 async def handle_ws(ws):
-	await ws.accept()
+    global pub_conn
+    await ws.accept()
 
-	# Define a callback that sends messages to this websocket
-	async def on_message(channel, message):
-		await ws.send_text(f"ch: [{channel}] msg: [{message}]\n")
-		raise Exception("blargh!")
+    # Create a separate connection for publishing messages:
+    if pub_conn is None:
+        pub_conn = await aioredis.create_redis('redis://localhost')
 
-	# Create a subscription for this websocket
-	sub = mpx.new_channel_subscription(on_message, 
-		lambda e: print(f"Network Error: {type(e)}: {e}"),
-		lambda s: print(f"Subscription now active: {s}"))
+    # Define a callback that sends messages to this websocket
+    async def on_message(channel: bytes, message: bytes):
+        await ws.send_text(f"ch: [{channel}] msg: [{message}]\n")
 
-	# Keep reading from the websocket, use the messages sent by the user
-	# to add and remove channels from the subscription.
-	# Use +channel to join a channel, -channel to leave.
-	# Sending !channel will send the next message to said channel.
-	while True:
-		msg = None
-		try:
-			msg = await ws.receive_text()
-		except:
-			print('ws disconnected')
-			sub.close()
-			return
-		prefix, chan = msg[0], msg[1:]
-		if prefix == "+": 
-			sub.add(chan)
-		elif prefix == "-":
-			sub.remove(chan)
-		elif prefix == '!':
-			# Send the next message to the given channel
-			await pub_conn.publish(chan, await ws.receive_text())
-		
+    # Create a subscription for this websocket
+    sub = mpx.new_channel_subscription(on_message, 
+        lambda e: print(f"Network Error: {type(e)}: {e}"),
+        lambda s: print(f"Subscription now active: {s}"))
+
+    # Keep reading from the websocket, use the messages sent by the user
+    # to add and remove channels from the subscription.
+    # Use +channel to join a channel, -channel to leave.
+    # Sending !channel will send the next message to said channel.
+    while True:
+        msg = None
+        try:
+            msg = await ws.receive_text()
+        except:
+            print('ws disconnected')
+            sub.close()
+            return
+        prefix, chan = msg[0], msg[1:]
+        if prefix == "+": 
+            sub.add(chan)
+        elif prefix == "-":
+            sub.remove(chan)
+        elif prefix == '!':
+            # Send the next message to the given channel
+            await pub_conn.publish(chan, await ws.receive_text())
+        
 
 app = Starlette(debug=True, routes=[
     WebSocketRoute('/ws', endpoint=handle_ws),
@@ -223,7 +226,7 @@ app = Starlette(debug=True, routes=[
 ```
 
 ### Dependences
-`pip install aioredis starlette uvcorn`
+`pip install redismpx aioredis starlette uvcorn`
 
 ### Launching the application
 `$ uvicorn websocket:app`
@@ -249,7 +252,7 @@ ws.send("+test")
 ws.send("!test")
 ws.send("hello world!")
 ```
-A more handy way of interacting with websockets are CLI clients:
+A more handy way of interacting with websockets are command-line clients:
 - https://github.com/hashrocket/ws (recommended)
 - https://github.com/websockets/wscat
 
