@@ -3,11 +3,11 @@ name: Python package
 on: [push]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.7, 3.8]
 
     steps:
     - uses: actions/checkout@v2
@@ -26,3 +26,18 @@ jobs:
       run: |
         pip install asyncio pytest pytest-asyncio
         pytest
+    - name: Publish on pypi
+      run: |
+        $CONTINUE && 
+        pip install setuptools wheel twine &&
+        python3 setup.py sdist bdist_wheel &&
+        twine upload dist/*
+      env: 
+        CONTINUE: ${{contains(github.ref, "ref/head/v*")}}
+        TWINE_NON_INTERACTIVE: 1
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.pypi_token }}
+
+
+
+

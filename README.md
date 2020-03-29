@@ -16,16 +16,16 @@ for each client connected to your service (e.g. WebSockets clients):
 
 
 ## Installation
-Requires Python 3.6+, based on [aio-libs/aioredis](https://github.com/aio-libs/aioredis),
+Requires Python 3.7+, based on [aio-libs/aioredis](https://github.com/aio-libs/aioredis),
 an AsyncIO Redis client.
 
-`pip install redismpx aioredis`
+`pip install redismpx`
 
 ## Features
 - Simple channel subscriptions
 - Pattern subscriptions
 - **[Networked promise system](https://python-mpx.readthedocs.io/en/latest/#redismpx.Multiplexer.new_promise_subscription)**
-- Connection retry with exponetial backoff + jitter
+- Automatic reconnection with exponetial backoff + jitter
 
 ## Documentation
 - [API Reference](https://python-mpx.readthedocs.io/en/latest/)

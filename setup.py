@@ -1,11 +1,13 @@
 import setuptools
+from redismpx.version import VERSION
+
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="redismpx",
-    version="0.1.0",
+    version=VERSION,
     author="Loris Cro",
     author_email="kappaloris@gmail.com",
     description="A Redis Pub/Sub multiplexer.",
