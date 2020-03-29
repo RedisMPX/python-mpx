@@ -30,8 +30,10 @@ jobs:
     - name: Publish on pypi
       if: contains(github.ref, 'ref/head/v*') && matrix.python-version  == '3.8'
       run: |
-        pip install setuptools wheel twine && 
-        python3 setup.py sdist bdist_wheel && 
+        MPXVER=$(python -c "import redismpx; print(redismpx.__version__)")
+        [ "${GITHUB_REF##*/}" == "v$MPXVER" ]
+        pip install setuptools wheel twine
+        python3 setup.py sdist bdist_wheel
         twine upload dist/*
       env: 
         TWINE_NON_INTERACTIVE: 1
