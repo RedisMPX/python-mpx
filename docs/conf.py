@@ -14,7 +14,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
-from redismpx.version import VERSION
+from redismpx import __version__
 
 # -- Project information -----------------------------------------------------
 
@@ -23,7 +23,7 @@ copyright = '2020, Loris Cro'
 author = 'Loris Cro'
 
 # The full version, including alpha/beta/rc tags
-release = VERSION
+release = __version__
 
 
 # -- General configuration ---------------------------------------------------

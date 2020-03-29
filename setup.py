@@ -1,5 +1,5 @@
 import setuptools
-from redismpx.version import VERSION
+from redismpx import __version__
 
 
 with open("README.md", "r") as fh:
@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="redismpx",
-    version=VERSION,
+    version=__version__,
     author="Loris Cro",
     author_email="kappaloris@gmail.com",
     description="A Redis Pub/Sub multiplexer.",
