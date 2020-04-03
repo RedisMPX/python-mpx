@@ -1,6 +1,7 @@
+import asyncio
 from typing import Union, Awaitable
-from .utils import Box, as_bytes, SubscriptionIsClosed
-
+from .utils import as_bytes, SubscriptionIsClosed
+from .internal import List, ListNode
 
 class InactiveSubscription(Exception):
 	pass
@@ -66,6 +67,7 @@ class PromiseSubscription:
 
 		A promise that expires will throw a `asyncio.TimeoutError`.
 
+
 		:param suffix: the suffix that will be appended to the subscription's prefix
 		:param timeout: a timeout for the promise expressed in seconds
 		:return: The message received from Pub/Sub.
@@ -79,13 +81,15 @@ class PromiseSubscription:
 		channel = self.prefix + suffix
 
 		if channel not in self.channels:
-			self.channels[channel] = []
+			self.channels[channel] = List(None)
 
 		loop = asyncio.get_running_loop()
 		fut = loop.create_future()
 		fut.channel = channel
+		node = ListNode(fut=fut)
+		fut.node = node
 		fut.add_done_callback(self._cleanup)
-		self.channels[channel].append(fut)
+		self.channels[channel].prepend(node)
 
 		return asyncio.wait_for(fut, timeout)
 
@@ -118,6 +122,16 @@ class PromiseSubscription:
 			except:
 				pass
 
+	def clear(self) -> None:
+		"""Cancels all outstanding promises"""
+
+		if self.closed:
+			raise SubscriptionIsClosed("tried to use a closed PromiseSubscription")
+
+		for ch in self.channels:
+			for node in self.channels[ch]:
+				node.fut.cancel()
+			del self.channels[ch]
 
 	def close(self) -> None:
 		"""Closes the subscription and cancels all outstanding promises."""
@@ -125,20 +139,18 @@ class PromiseSubscription:
 		if self.closed:
 			raise SubscriptionIsClosed("tried to use a closed PromiseSubscription")
 
+		self.clear()
 		self.closed = True
 		self.active.set()
 		self.pat_sub.close()
-		for ch in self.channels:
-			for fut in self.channels[ch]:
-				fut.cancel()
-			del self.channels[ch]
+		
 
 	def on_disconnect(self, error):
 		if not self.closed:
 			self.active.clear()
 			for ch in self.channels:
-				for fut in self.channels[ch]:
-					fut.cancel()
+				for node in self.channels[ch]:
+					node.fut.cancel()
 				del self.channels[ch]
 
 	def on_activation(self, pattern):
@@ -146,10 +158,14 @@ class PromiseSubscription:
 
 	async def on_message(self, channel, message):
 		if channel in self.channels:
-			for fut in self.channels[channel]:
-				fut.set_result(message)
+			for node in self.channels[channel]:
+				node.fut.set_result(message)
 			del self.channels[channel]
 
 	def _cleanup(self, fut):
-		if fut.exception() is not None:
-			self.channels[fut.channel].remove(fut)
+		try:
+			fut.exception() 
+		except:
+			print(self.channels[fut.channel]._head is fut.node)
+			if fut.node.remove_from_list().is_empty():
+				del self.channels[fut.channel]

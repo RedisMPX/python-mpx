@@ -11,23 +11,29 @@ mpx = Multiplexer('redis://localhost')
 async def handle_ws(ws):
 	await ws.accept()
 
-	sub = mpx.new_promise_subscription("test")
+	sub = mpx.new_promise_subscription("promise:")
+
+	await ws.send_text(f"# Send a suffix to create a promise.")
 
 	# Keep reading from the websocket, use the messages sent by the user
 	# to add and remove channels from the subscription.
 	while True:
-		msg = None
+		suffix = None
 		try:
-			msg = await ws.receive_text()
+			suffix = await ws.receive_text()
 		except:
 			print('ws disconnected')
 			sub.close()
 			return
-		prefix, msg = msg[0], msg[1:]
-		if prefix == "+":
-			promise = sub.new_promise(msg, 10)
-			print(await promise)
 		
+		promise = sub.new_promise(suffix, 5)
+		await ws.send_text(f"# Send a pubsub message with redis-cli or any other client to fullfull the promise.")
+		await ws.send_text(f"#    > PUBLISH promise:{suffix} 'your-promise-payload'")
+		await ws.send_text(f"# The promise will expire in 5 seconds.")
+		try:
+			await ws.send_text(await promise)
+		except asyncio.TimeoutError:
+			print("the promise timed out")
 
 app = Starlette(debug=True, routes=[
     WebSocketRoute('/ws', endpoint=handle_ws),

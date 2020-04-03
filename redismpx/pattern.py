@@ -1,6 +1,6 @@
 from typing import Union
-from .utils import Box, as_bytes, SubscriptionIsClosed
-
+from .utils import as_bytes, SubscriptionIsClosed
+from .internal import ListNode
 
 class PatternSubscription:
 	"""
@@ -29,19 +29,20 @@ class PatternSubscription:
 		self.channels = {}
 		self.mpx = multiplexer
 		self.pattern = pattern
-		self.fn_box =  Box(on_message, on_activation)
+		self.fn_box =  ListNode(on_message=on_message, on_activation=on_activation)
 		self.on_disconnect = on_disconnect
 		self.on_activation = on_activation
 		self.closed = False
-
+		self.subNode = ListNode(on_disconnect=on_disconnect)
+		self.mpx.subscriptions.prepend(self.subNode)
 		self.mpx._add_pattern(pattern, self.fn_box)
 
 	def close(self) -> None:
 		"""Closes the subscription."""
-
 		if self.closed:
 			raise SubscriptionIsClosed("tried to use a closed PatternSubscription")
+			
 		self.mpx._remove_pattern(self.pattern, self.fn_box)
+		self.subNode.remove_from_list()
 		self.closed = True
-		self.mpx._remove_subscription(self)
 

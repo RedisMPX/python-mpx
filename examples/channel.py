@@ -20,7 +20,7 @@ async def handle_ws(ws):
 
     # Define a callback that sends messages to this websocket
     async def on_message(channel: bytes, message: bytes):
-        await ws.send_text(f"ch: [{channel}] msg: [{message}]\n")
+        await ws.send_text(f"ch: [{channel.decode()}] msg: [{message.decode()}]\n")
 
     # Create a subscription for this websocket
     sub = mpx.new_channel_subscription(on_message, 
@@ -31,6 +31,10 @@ async def handle_ws(ws):
     # to add and remove channels from the subscription.
     # Use +channel to join a channel, -channel to leave.
     # Sending !channel will send the next message to said channel.
+    await ws.send_text('# Use +channel to join a channel, -channel to leave.')
+    await ws.send_text('# Sending !channel will send the next message to said channel.')
+    await ws.send_text('# To see a message sent to a given channel, you must have joined it beforehand.')
+
     while True:
         msg = None
         try:

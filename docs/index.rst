@@ -26,9 +26,10 @@ Installation
 ------------
 
 Requires Python 3.7+, based on `aio-libs/aioredis <https://github.com/aio-libs/aioredis>`_,
-an AsyncIO Redis client.
+an AsyncIO Redis client::
 
-`pip install redismpx`
+   pip install redismpx
+
 
 Features
 --------

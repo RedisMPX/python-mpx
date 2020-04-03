@@ -1,6 +1,6 @@
 from typing import Union
-from .utils import Box, as_bytes
-
+from .utils import as_bytes
+from .internal import ListNode
 
 class ChannelSubscription:
 	"""
@@ -34,6 +34,8 @@ class ChannelSubscription:
 		self.on_disconnect = on_disconnect
 		self.on_activation = on_activation
 		self.closed = False
+		self.subNode = ListNode(on_disconnect=self.on_disconnect)
+		self.mpx.subscriptions.prepend(self.subNode)
 
 	def add(self, channel: Union[str, bytes]) -> None:
 		"""
@@ -48,9 +50,9 @@ class ChannelSubscription:
 		if channel in self.channels:
 			return
 
-		fn_box = Box(self.on_message, self.on_activation)
+		fn_box = ListNode(on_message=self.on_message, on_activation=self.on_activation)
 		self.channels[channel] = fn_box
-		self.mpx._add(channel, fn_box)
+		self.mpx._add_channel(channel, fn_box)
 
 	def remove(self, channel: Union[str, bytes]) -> None:
 		"""
@@ -66,16 +68,24 @@ class ChannelSubscription:
 		if channel not in self.channels:
 			return
 		fn_box = self.channels.pop(channel)
-		self.mpx._remove(channel, fn_box)
+		self.mpx._remove_channel(channel, fn_box)
 
-	def close(self) -> None:
-		"""Closes the subscription."""
-
+	def clear(self) -> None:
+		"""Removes all channels from the subscription"""
 		if self.closed:
 			raise Exception("tried to use a closed ChannelSubscription")
 
-		while len(self.channels) > 0:
-			ch, fn_box = self.channels.popitem()
-			self.mpx._remove(ch, fn_box)
+		for k in self.channels:
+			fn_box = self.channels[k]
+			self.mpx._remove_channel(ch, fn_box)
+
+		self.channels = {}
+
+	def close(self) -> None:
+		"""Closes the subscription."""
+		if self.closed:
+			raise Exception("tried to use a closed ChannelSubscription")
+
+		self.clear()
+		self.subNode.remove_from_list()
 		self.closed = True
-		self.mpx._remove_subscription(self)

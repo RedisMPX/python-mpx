@@ -2,15 +2,15 @@ import asyncio
 import logging
 import aioredis
 from typing import Union, Awaitable, Callable, Optional
-from .connection import Conn
-from .utils import Box, as_bytes, jitter_exp_backoff
+from .internal import Conn, List
+from .utils import as_bytes, jitter_exp_backoff
 from .channel import ChannelSubscription
 from .pattern import PatternSubscription
 from .promise import PromiseSubscription
 
-OnMessage = Callable[[bytes, bytes], Union[None, Awaitable[None]]]
-OnDisconnect = Callable[[Exception], Union[None, Awaitable[None]]]
-OnActivation = Callable[[bytes], Union[None, Awaitable[None]]]
+OnMessage = Callable[[bytes, bytes], Optional[Awaitable[None]]]
+OnDisconnect = Callable[[Exception], Optional[Awaitable[None]]]
+OnActivation = Callable[[bytes], Optional[Awaitable[None]]]
 
 class Multiplexer:
 	"""
@@ -79,7 +79,7 @@ class Multiplexer:
 		self.patterns = {}
 		self.active_channels = set()
 		self.active_patterns = set()
-		self.subscriptions = []
+		self.subscriptions = List(None)
 		self.connection = None
 		self.connection_options = (args, kwargs)
 		self.must_exit = False
@@ -109,7 +109,6 @@ class Multiplexer:
 		if on_message is None:
 			raise Exception("on_message cannot be None")
 		sub = ChannelSubscription(self, on_message, on_disconnect, on_activation)
-		self.subscriptions.append(sub)
 		return sub
 
 	def new_pattern_subscription(self, 
@@ -135,7 +134,6 @@ class Multiplexer:
 		if on_message is None:
 			raise Exception("on_message cannot be None")
 		sub = PatternSubscription(self, pattern, on_message, on_disconnect, on_activation)
-		self.subscriptions.append(sub)
 		return sub
 
 	def new_promise_subscription(self, prefix: Union[str, bytes]) -> PromiseSubscription:
@@ -216,6 +214,11 @@ class Multiplexer:
 			logging.debug("redismpx resubscribing %s", self.channels.keys())
 			self.connection.write_command(b"SUBSCRIBE", *self.channels.keys())
 
+		# Resubscribe to all patterns, if any is present.
+		if len(self.patterns) > 0:
+			logging.debug("redismpx resubscribing %s", self.patterns.keys())
+			self.connection.write_command(b"PSUBSCRIBE", *self.patterns.keys())
+
 		try:
 			async for msg in self.connection.read_message():
 				if msg[0] == b"message":
@@ -291,10 +294,7 @@ class Multiplexer:
 		except Exception as e:
 			logging.warning(f"redismpx id({id(self)}): on_disconnect function threw exception: {e}")
 
-	def _remove_subscription(self, sub):
-		self.subscriptions.remove(sub)
-
-	def _add(self, channel, fn_box):
+	def _add_channel(self, channel, fn_box):
 		if self.must_exit:
 			raise Exception("tried to use a closed multiplexer")
 
@@ -305,22 +305,21 @@ class Multiplexer:
 					self.connection.write_command(b"SUBSCRIBE", channel)
 			except Exception as e:
 				asyncio.create_task(self._reconnect(e))
-			self.channels[channel] = []
+			self.channels[channel] = List(fn_box)
 		else:
 			# We are already subscribed, check if the sub is active
 			# if so, we immediately trigger on_activation
 			if channel in self.active_channels:
 				if fn_box.on_activation is not None:
 					asyncio.create_task(self._log_exeptions(fn_box.on_activation, channel))
-		self.channels[channel].append(fn_box)
+			self.channels[channel].prepend(fn_box)
 
-	def _remove(self, channel, fn_box):
+	def _remove_channel(self, channel, fn_box):
 		if self.must_exit:
 			raise Exception("tried to use a closed multiplexer")
 
-		fn_box_list = self.channels[channel]
-		fn_box_list.remove(fn_box)
-		if len(fn_box_list) == 0:
+		fn_box_list = fn_box.remove_from_list()
+		if fn_box_list.is_empty():
 			del self.channels[channel]
 			self.active_channels.remove(channel)
 			try:
@@ -341,22 +340,21 @@ class Multiplexer:
 					self.connection.write_command(b"PSUBSCRIBE", pattern)
 			except Exception as e:
 				asyncio.create_task(self._reconnect(e))
-			self.patterns[pattern] = []
+			self.patterns[pattern] = List(fn_box)
 		else:
 			# We are already subscribed, check if the sub is active
 			# if so, we immediately trigger on_activation
 			if pattern in self.active_patterns:
 				if fn_box.on_activation is not None:
 					asyncio.create_task(self._log_exeptions(fn_box.on_activation, pattern))
-		self.patterns[pattern].append(fn_box)
+			self.patterns[pattern].prepend(fn_box)
 
 	def _remove_pattern(self, pattern, fn_box):
 		if self.must_exit:
 			raise Exception("tried to use a closed multiplexer")
 
-		fn_box_list = self.patterns[pattern]
-		fn_box_list.remove(fn_box)
-		if len(fn_box_list) == 0:
+		fn_box_list = fn_box.remove_from_list()
+		if fn_box_list.is_empty():
 			del self.patterns[pattern]
 			self.active_patterns.remove(pattern)
 			try:
