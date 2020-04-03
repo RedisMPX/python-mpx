@@ -161,10 +161,10 @@ promise_sub.close()
 This is a more realistic example of how to use RedisMPX.
 
 ### Code
-This code is also available in [examples/websocket.py](/examples/websocket.py).
+This code is also available in [examples/channel.py](/examples/channel.py).
 
 ```python
-# websocket.py
+# channel.py
 
 import asyncio
 import aioredis
@@ -188,7 +188,7 @@ async def handle_ws(ws):
 
     # Define a callback that sends messages to this websocket
     async def on_message(channel: bytes, message: bytes):
-        await ws.send_text(f"ch: [{channel}] msg: [{message}]\n")
+        await ws.send_text(f"ch: [{channel.decode()}] msg: [{message.decode()}]\n")
 
     # Create a subscription for this websocket
     sub = mpx.new_channel_subscription(on_message, 
@@ -199,6 +199,10 @@ async def handle_ws(ws):
     # to add and remove channels from the subscription.
     # Use +channel to join a channel, -channel to leave.
     # Sending !channel will send the next message to said channel.
+    await ws.send_text('# Use +channel to join a channel, -channel to leave.')
+    await ws.send_text('# Sending !channel will send the next message to said channel.')
+    await ws.send_text('# To see a message sent to a given channel, you must have joined it beforehand.')
+
     while True:
         msg = None
         try:
@@ -251,5 +255,5 @@ ws.send("hello world!")
 ```
 A more handy way of interacting with websockets are command-line clients:
 - https://github.com/hashrocket/ws (recommended)
-- https://github.com/websockets/wscat
+- https://github.com/esphen/wsta
 
