@@ -104,7 +104,7 @@ class PromiseSubscription:
 		if self.closed:
 			raise SubscriptionIsClosed("tried to use a closed PromiseSubscription")
 
-	async def wait_for_new_promise(self, prefix: Union[str, bytes]) -> Awaitable[bytes]:
+	async def wait_for_new_promise(self, prefix: Union[str, bytes]) -> Awaitable[Awaitable[bytes]]:
 		"""
 		Like :func:`~redismpx.PromiseSubscription.new_promise` but waits for
 		the subscription to become active instead of throwing 
